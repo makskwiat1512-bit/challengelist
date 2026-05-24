@@ -1,0 +1,61 @@
+name: Notify Discord on New Demon
+on:
+  push:
+    paths:
+      - 'data/*.json'      # Tracks individual level JSON files
+      - '!data/_*.json'    # Ignores configuration lists like _packlist.json
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Identify and Parse New Level
+        id: parse_level
+        run: |
+          sudo apt-get install jq
+          
+          # Find the name of the newly added or modified JSON file in the data folder
+          FILE_CHANGED=$(git diff --name-only HEAD~1 HEAD | grep '^data/.*\.json$' | grep -v '^data/_' | head -n 1)
+          
+          if [ -z "$FILE_CHANGED" ]; then
+            echo "No valid level file changed."
+            exit 0
+          fi
+
+          # Read GDListTemplate specific attributes directly out of the data file
+          LEVEL_NAME=$(jq -r '.name // "Unnamed Level"' "$FILE_CHANGED")
+          AUTHOR=$(jq -r '.author // "Unknown Creator"' "$FILE_CHANGED")
+          VERIFIER=$(jq -r '.verifier // "Unknown Verifier"' "$FILE_CHANGED")
+          VIDEO=$(jq -r '.verifierKey // .video // "No video available"' "$FILE_CHANGED")
+
+          # Save tracking info for the Discord step
+          echo "name=$LEVEL_NAME" >> $GITHUB_OUTPUT
+          echo "author=$AUTHOR" >> $GITHUB_OUTPUT
+          echo "verifier=$VERIFIER" >> $GITHUB_OUTPUT
+          echo "video=$VIDEO" >> $GITHUB_OUTPUT
+
+      - name: Send Embed to Discord
+        if: steps.parse_level.outputs.name != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '{
+                 "embeds": [{
+                   "title": "🔥 New Demon Added to the List! 🔥",
+                   "color": 15418782,
+                   "description": "🏆 **${{ steps.parse_level.outputs.name }}** has been officially placed on the list!",
+                   "fields": [
+                     { "name": "Creator / Author", "value": "${{ steps.parse_level.outputs.author }}", "inline": true },
+                     { "name": "Verifier", "value": "${{ steps.parse_level.outputs.verifier }}", "inline": true },
+                     { "name": "Verification Proof", "value": "${{ steps.parse_level.outputs.video }}" }
+                   ],
+                   "footer": { "text": "Cloudflare Pages Site Updated Successfully" }
+                 }]
+               }' $DISCORD_WEBHOOK
