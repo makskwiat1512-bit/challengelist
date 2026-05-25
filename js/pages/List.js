@@ -109,7 +109,7 @@ export default {
                         Have either source audio or clicks/taps in the video. Edited audio only does not count.
                     </p>
                     <p>
-                        If you have no microphone, and have Geode, you can use the Bongo Cat mod and not have xdBot installed.
+                        If your microphone is unavailable, please try to find a suitable and appropriate replacement.
                     </p>
                     <p>
                         The recording must have a previous attempt and entire death animation shown before the completion, unless the completion is on the first attempt. Everyplay records are exempt from this
