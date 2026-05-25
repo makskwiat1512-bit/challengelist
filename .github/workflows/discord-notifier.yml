@@ -31,7 +31,7 @@ jobs:
           LEVEL_NAME=$(jq -r '.name // "Unnamed Level"' "$FILE_CHANGED")
           AUTHOR=$(jq -r '.author // "Unknown Creator"' "$FILE_CHANGED")
           VERIFIER=$(jq -r '.verifier // "Unknown Verifier"' "$FILE_CHANGED")
-          VIDEO=$(jq -r '.verifierKey // .video // "No video available"' "$FILE_CHANGED")
+          VIDEO=$(jq -r '.verification // .video // "No video available"' "$FILE_CHANGED")
 
           # Save tracking info for the Discord step
           echo "name=$LEVEL_NAME" >> $GITHUB_OUTPUT
