@@ -47,7 +47,7 @@ jobs:
           curl -H "Content-Type: application/json" \
                -X POST \
                -d '{
-                 "content": "<@&PASTE_YOUR_COPIED_ROLE_ID_HERE>",
+                 "content": "<@&1508176598078193775>",
                  "allowed_mentions": {
                    "parse": ["roles"]
                  },
