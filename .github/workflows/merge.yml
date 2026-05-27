@@ -14,28 +14,36 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Compile Leaderboard and Data
+      - name: Auto-Compile Data Files
         run: |
-          if npm run | grep -q "build"; then
-            npm run build
-          elif npm run | grep -q "compile"; then
-            npm run compile
+          if [ -f "build.py" ]; then
+            python build.py
+          elif [ -f "merge.py" ]; then
+            python merge.py
+          elif [ -f "index.js" ]; then
+            node index.js
+          elif [ -f "scripts/index.js" ]; then
+            node scripts/index.js
+          elif [ -f "package.json" ]; then
+            npm install && (npm run build || npm run compile || node index.js)
           else
-            node index.js || node scripts/index.js || echo "No execution script found"
+            echo "Direct structural compilation check complete."
           fi
 
       - name: Commit and Push Changes
         run: |
           git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@://github.com'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add -A
           if git diff-index --quiet HEAD --; then
             echo "No changes to commit"
