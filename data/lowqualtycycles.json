@@ -8,11 +8,11 @@
     "percentToQualify": 56,
     "password": "Free To Copy",
     "records": [
-    {
-        "user": "LeaderboardFixer",
-        "percent": 100,
-        "hz": 360,
-        "link": "https://youtube.com"
-    }
-]
-
+        {
+            "user": "LeaderboardFixer",
+            "percent": 100,
+            "hz": 360,
+            "link": "https://youtube.com"
+        }
+    ]
+}
