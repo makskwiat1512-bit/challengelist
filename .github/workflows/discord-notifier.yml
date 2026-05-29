@@ -14,33 +14,57 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Identify and Parse New Level
-        id: parse_level
+      - name: Identify and Parse List Update
+        id: parse_list
         run: |
-          sudo apt-get install jq
+          sudo apt-get install -y jq
           
-          # Find the name of the newly added or modified JSON file in the data folder
-          FILE_CHANGED=$(git diff --name-only HEAD~1 HEAD | grep '^data/.*\.json$' | grep -v '^data/_' | head -n 1)
+          # 1. Check for newly ADDED files (New Level)
+          ADDED_FILE=$(git diff --name-only --diff-filter=A HEAD~1 HEAD | grep '^data/.*\.json$' | grep -v '^data/_' | head -n 1)
           
-          if [ -z "$FILE_CHANGED" ]; then
-            echo "No valid level file changed."
+          # 2. Check for MODIFIED files (New Victor/Record)
+          MODIFIED_FILE=$(git diff --name-only --diff-filter=M HEAD~1 HEAD | grep '^data/.*\.json$' | grep -v '^data/_' | head -n 1)
+
+          # --- ROUTE A: NEW LEVEL DETECTED ---
+          if [ ! -z "$ADDED_FILE" ]; then
+            echo "action_type=new_level" >> $GITHUB_OUTPUT
+            
+            LEVEL_NAME=$(jq -r '.name // "Unnamed Level"' "$ADDED_FILE")
+            AUTHOR=$(jq -r '.author // "Unknown Creator"' "$ADDED_FILE")
+            VERIFIER=$(jq -r '.verifier // "Unknown Verifier"' "$ADDED_FILE")
+            VIDEO=$(jq -r '.verification // .video // .verifierKey // "No video available"' "$ADDED_FILE")
+
+            echo "name=$LEVEL_NAME" >> $GITHUB_OUTPUT
+            echo "author=$AUTHOR" >> $GITHUB_OUTPUT
+            echo "verifier=$VERIFIER" >> $GITHUB_OUTPUT
+            echo "video=$VIDEO" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # Read GDListTemplate specific attributes directly out of the data file
-          LEVEL_NAME=$(jq -r '.name // "Unnamed Level"' "$FILE_CHANGED")
-          AUTHOR=$(jq -r '.author // "Unknown Creator"' "$FILE_CHANGED")
-          VERIFIER=$(jq -r '.verifier // "Unknown Verifier"' "$FILE_CHANGED")
-          VIDEO=$(jq -r '.verification // .video // .verifierKey // "No video available"' "$FILE_CHANGED")
+          # --- ROUTE B: NEW VICTOR DETECTED ---
+          if [ ! -z "$MODIFIED_FILE" ] && [ -z "$ADDED_FILE" ]; then
+            echo "action_type=new_victor" >> $GITHUB_OUTPUT
+            
+            LEVEL_NAME=$(jq -r '.name // "Unnamed Level"' "$MODIFIED_FILE")
+            
+            # Extracts the 'user' and 'link' values from the last item inside the records array
+            VICTOR_NAME=$(jq -r '.records[-1].user // "Unknown Victor"' "$MODIFIED_FILE")
+            VICTOR_PROOF=$(jq -r '.records[-1].link // "No proof available"' "$MODIFIED_FILE")
+            
+            # If your template uses 100% explicitly, or needs progress tracker
+            VICTOR_PERCENT=$(jq -r '.records[-1].percent // "100"' "$MODIFIED_FILE")
 
-          # Save tracking info for the Discord step
-          echo "name=$LEVEL_NAME" >> $GITHUB_OUTPUT
-          echo "author=$AUTHOR" >> $GITHUB_OUTPUT
-          echo "verifier=$VERIFIER" >> $GITHUB_OUTPUT
-          echo "video=$VIDEO" >> $GITHUB_OUTPUT
+            echo "name=$LEVEL_NAME" >> $GITHUB_OUTPUT
+            echo "victor=$VICTOR_NAME" >> $GITHUB_OUTPUT
+            echo "percent=$VICTOR_PERCENT" >> $GITHUB_OUTPUT
+            echo "proof=$VICTOR_PROOF" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
-      - name: Send Embed to Discord
-        if: steps.parse_level.outputs.name != ''
+          echo "No valid level file additions or modifications found."
+
+      - name: Send New Level Embed to Discord
+        if: steps.parse_list.outputs.action_type == 'new_level'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
@@ -48,20 +72,41 @@ jobs:
                -X POST \
                -d '{
                  "content": "<@&1508176598078193775>",
-                 "allowed_mentions": {
-                   "parse": ["roles"]
-                 },
+                 "allowed_mentions": { "parse": ["roles"] },
                  "embeds": [{
                    "title": "New Demon Added to the List!",
                    "color": 15418782,
-                   "description": "**${{ steps.parse_level.outputs.name }}** has been officially placed on the list!",
+                   "description": "**${{ steps.parse_list.outputs.name }}** has been officially placed on the list!",
                    "fields": [
-                     { "name": "Creator / Author", "value": "${{ steps.parse_level.outputs.author }}", "inline": true },
-                     { "name": "Verifier", "value": "${{ steps.parse_level.outputs.verifier }}", "inline": true },
-                     { "name": "Verification Proof", "value": "${{ steps.parse_level.outputs.video }}" }
+                     { "name": "Creator / Author", "value": "${{ steps.parse_list.outputs.author }}", "inline": true },
+                     { "name": "Verifier", "value": "${{ steps.parse_list.outputs.verifier }}", "inline": true },
+                     { "name": "Verification Proof", "value": "${{ steps.parse_list.outputs.video }}" }
                    ],
                    "footer": { "text": "Cloudflare Pages Site Updated Successfully" }
                  }]
                }' $DISCORD_WEBHOOK
 
+      - name: Send New Victor Embed to Discord
+        if: steps.parse_list.outputs.action_type == 'new_victor'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '{
+                 "content": "<@&1508176598078193775>",
+                 "allowed_mentions": { "parse": ["roles"] },
+                 "embeds": [{
+                   "title": "New Victor for List Level!",
+                   "color": 3066993,
+                   "description": "**${{ steps.parse_list.outputs.victor }}** has beaten **${{ steps.parse_list.outputs.name }}** (${{ steps.parse_list.outputs.percent }}%)!",
+                   "fields": [
+                     { "name": "Victor Name", "value": "${{ steps.parse_list.outputs.victor }}", "inline": true },
+                     { "name": "Level", "value": "${{ steps.parse_list.outputs.name }}", "inline": true },
+                     { "name": "Record Proof", "value": "${{ steps.parse_list.outputs.proof }}" }
+                   ],
+                   "footer": { "text": "List Record Accepted Successfully" }
+                 }]
+               }' $DISCORD_WEBHOOK
 
+               }' $DISCORD_WEBHOOK
